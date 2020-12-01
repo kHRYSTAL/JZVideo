@@ -59,4 +59,5 @@
     <string name="local_video">播放本地视频</string>
     <string name="direct_play_fullscreen">直接全屏播放</string>
     <string name="direct_play_tiny">直接小窗播放</string>
+    <string name="screenshot_gif">截取gif</string>
 </resources>

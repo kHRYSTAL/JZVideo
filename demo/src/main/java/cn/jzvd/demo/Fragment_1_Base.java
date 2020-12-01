@@ -25,6 +25,7 @@ import cn.jzvd.demo.Tab_1_Basic.OrientationActivity;
 import cn.jzvd.demo.Tab_1_Basic.PreloadingActivity;
 import cn.jzvd.demo.Tab_1_Basic.RotationVideoSizeActivity;
 import cn.jzvd.demo.Tab_1_Basic.ScreenRotateActivity;
+import cn.jzvd.demo.Tab_1_Basic.ScreenShotGifActivity;
 
 import static android.content.Context.SENSOR_SERVICE;
 
@@ -36,7 +37,7 @@ public class Fragment_1_Base extends Fragment implements View.OnClickListener {
 
     private JzvdStd mJzvdStd;
     private Button mOrientation,
-            mRotationAndVideoSize, mCustomMediaPlayer, mPreLoading, mScreenRotate;
+            mRotationAndVideoSize, mCustomMediaPlayer, mPreLoading, mScreenRotate, mScreenShot;
     private Jzvd.JZAutoFullscreenListener mSensorEventListener;
     private SensorManager mSensorManager;
 
@@ -50,12 +51,14 @@ public class Fragment_1_Base extends Fragment implements View.OnClickListener {
         mCustomMediaPlayer = view.findViewById(R.id.custom_mediaplayer);
         mPreLoading = view.findViewById(R.id.preloading);
         mScreenRotate = view.findViewById(R.id.screen_rotate);
+        mScreenShot = view.findViewById(R.id.screenshoot_gif);
 
         mOrientation.setOnClickListener(this);
         mRotationAndVideoSize.setOnClickListener(this);
         mCustomMediaPlayer.setOnClickListener(this);
         mPreLoading.setOnClickListener(this);
         mScreenRotate.setOnClickListener(this);
+        mScreenShot.setOnClickListener(this);
 
         mSensorManager = (SensorManager) getContext().getSystemService(SENSOR_SERVICE);
         mSensorEventListener = new Jzvd.JZAutoFullscreenListener();
@@ -118,6 +121,10 @@ public class Fragment_1_Base extends Fragment implements View.OnClickListener {
             case R.id.screen_rotate:
                 startActivity(new Intent(getContext(), ScreenRotateActivity.class));
                 break;
+            case R.id.screenshoot_gif:
+                startActivity(new Intent(getContext(), ScreenShotGifActivity.class));
+                break;
+
         }
     }
 }
