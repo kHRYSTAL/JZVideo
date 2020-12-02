@@ -58,5 +58,4 @@
     <string name="local_video">LOCAL VIDEO</string>
     <string name="direct_play_fullscreen">Fullscreen</string>
     <string name="direct_play_tiny">TinyWindow</string>
-    <string name="screenshot_gif">screenshot_gif</string>
 </resources>

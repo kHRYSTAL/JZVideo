@@ -6,17 +6,21 @@ import android.media.ThumbnailUtils;
 import android.os.Environment;
 import android.text.TextUtils;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.SequenceInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Vector;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import cn.jzvd.JzvdStd;
-import cn.jzvd.demo.utils.AnimatedGifEncoder;
+import me.khrystal.gifbuilder.encoder.GIFEncoder;
 import wseemann.media.FFmpegMediaMetadataRetriever;
 
 /**
@@ -113,24 +117,21 @@ public class GifCreateHelper {
         FFmpegMediaMetadataRetriever mmr = prepareFFmpegMediaMetadataRetriever(vedioUrl);
         for (int i = 0; i < bitmapCount; i++) {
             final int index = i;
-            executorService.submit(new Runnable() {
-                @Override
-                public void run() {
-                    //先缓存到本地，全放入内存占用空间太大
-                    String path = saveBitmap(mmr.getScaledFrameAtTime((bitmapFromTime + index * mDelay) * 1000, FFmpegMediaMetadataRetriever.OPTION_CLOSEST, gifWidth, gifHeight),
-                            cacheImageDir + "/" + System.currentTimeMillis() + "index-" + index + ".png");
-                    boolean isCurrentSuccess = true;
-                    if (!TextUtils.isEmpty(path)) {
-                        picList[index] = path;
-                    } else {
-                        picList[index] = completeButNoImageTag;
-                        isCurrentSuccess = false;
-                    }
+            executorService.submit(() -> {
+                //先缓存到本地，全放入内存占用空间太大
+                String path = saveBitmap(mmr.getScaledFrameAtTime((bitmapFromTime + index * mDelay) * 1000, FFmpegMediaMetadataRetriever.OPTION_CLOSEST, gifWidth, gifHeight),
+                        cacheImageDir + "/" + System.currentTimeMillis() + "index-" + index + ".png");
+                boolean isCurrentSuccess = true;
+                if (!TextUtils.isEmpty(path)) {
+                    picList[index] = path;
+                } else {
+                    picList[index] = completeButNoImageTag;
+                    isCurrentSuccess = false;
+                }
 
-                    checkCompleteAndDoNext(picList, isCurrentSuccess);
-                    if (isDownloadComplete) {
-                        mmr.release();
-                    }
+                checkCompleteAndDoNext(picList, isCurrentSuccess);
+                if (isDownloadComplete) {
+                    mmr.release();
                 }
             });
         }
@@ -253,12 +254,10 @@ public class GifCreateHelper {
      * @param smallScale   缩小倍数，越大处理越快
      */
     public boolean createGif(File file, List<String> pics, int delay, int inSampleSize, int smallScale) {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        AnimatedGifEncoder localAnimatedGifEncoder = new AnimatedGifEncoder();
-        localAnimatedGifEncoder.start(baos);
-        localAnimatedGifEncoder.setRepeat(0);//设置生成gif的开始播放时间。0为立即开始播放
-        localAnimatedGifEncoder.setDelay(delay);
+        ExecutorService service = Executors.newCachedThreadPool();
+        final CountDownLatch countDownLatch = new CountDownLatch(pics.size());
         for (int i = 0; i < pics.size(); i++) {
+            final int n = i;
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inSampleSize = inSampleSize;
             options.inJustDecodeBounds = true; // 先获取原大小
@@ -268,24 +267,60 @@ public class GifCreateHelper {
             options.inJustDecodeBounds = false; // 获取新的大小
             Bitmap bitmap = BitmapFactory.decodeFile(pics.get(i), options);
             Bitmap pic = ThumbnailUtils.extractThumbnail(bitmap, (int) w, (int) h);
-            localAnimatedGifEncoder.addFrame(pic);
-            bitmap.recycle();
-            pic.recycle();
-            mJzGifListener.process(i, pics.size(), "组合中");
-        }
-        localAnimatedGifEncoder.finish();//finish
-        try {
-            FileOutputStream fos = new FileOutputStream(file.getPath());
-            baos.writeTo(fos);
-            baos.flush();
-            fos.flush();
-            baos.close();
-            fos.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return false;
+            Runnable runnable = () -> {
+                GIFEncoder encoder = new GIFEncoder();
+                if (n == 0) {
+                    encoder.addFirstFrame(pics.get(n), pic);
+                } else if (n == pics.size() - 1) {
+                    encoder.addLastFrame(pics.get(n), pic);
+                } else {
+                    encoder.addFrame(pics.get(n), pic);
+                }
+                mJzGifListener.process(n, pics.size(), "组合中");
+                countDownLatch.countDown();
+            };
+            service.execute(runnable);
         }
 
+        SequenceInputStream sequenceInputStream = null;
+        FileOutputStream fos = null;
+        try {
+            countDownLatch.await();
+            Vector<InputStream> streams = new Vector<InputStream>();
+            for (String filePath : pics) {
+                InputStream inputStream = new FileInputStream(filePath);
+                streams.add(inputStream);
+            }
+            sequenceInputStream = new SequenceInputStream(streams.elements());
+            fos = new FileOutputStream(file);
+            byte[] buffer = new byte[1024];
+            int len = 0;
+            // byte read表示一次读取到buffers中的数量。
+            while ((len = sequenceInputStream.read(buffer)) != -1) {
+                fos.write(buffer, 0, len);
+            }
+            fos.flush();
+            fos.close();
+            sequenceInputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (sequenceInputStream != null) {
+                try {
+                    sequenceInputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
         return true;
     }
 
